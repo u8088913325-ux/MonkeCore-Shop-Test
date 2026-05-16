@@ -21,20 +21,25 @@
       </div>
     </div>
 
-    <button class="discord-button" onclick="openDiscordInfo()">
-      Discord Server
-    </button>
+    <div class="top-actions">
+      <button class="discord-button" onclick="window.location.href='/auth/discord'">
+        Authorize with Discord
+      </button>
+
+      <button class="discord-button" onclick="window.open('PASTE_YOUR_DISCORD_INVITE_LINK_HERE', '_blank')">
+        Discord Server
+      </button>
+    </div>
   </header>
 
   <main>
     <section class="hero">
-      <div class="badge">TEST SHOP VERSION</div>
+      <div class="badge">SHOP VERSION</div>
 
       <h2>Monke Core Access Packages</h2>
 
       <p>
         Choose a package to unlock extra Monke Core areas inside the Discord server.
-        This page is currently only a test version. No real payment will be taken.
       </p>
     </section>
 
@@ -45,7 +50,7 @@
         <h3>Checker Pack</h3>
 
         <div class="price">€1.99</div>
-        <div class="price-note">one-time access test</div>
+        <div class="price-note">one-time access</div>
 
         <button class="subscribe-button" onclick="openCheckout('checker')">
           Test Subscribe
@@ -78,7 +83,7 @@
         <h3>Utility Pack</h3>
 
         <div class="price">€5.99</div>
-        <div class="price-note">one-time access test</div>
+        <div class="price-note">one-time access</div>
 
         <button class="subscribe-button" onclick="openCheckout('utility')">
           Test Subscribe
@@ -111,7 +116,7 @@
         <h3>All Access Pack</h3>
 
         <div class="price">€7.99</div>
-        <div class="price-note">one-time access test</div>
+        <div class="price-note">one-time access</div>
 
         <button class="subscribe-button" onclick="openCheckout('allaccess')">
           Test Subscribe
@@ -161,7 +166,7 @@
 
         <div>
           <h3 id="checkoutName">Checker Pack</h3>
-          <p>Monke Core test access</p>
+          <p>Monke Core package access</p>
         </div>
 
         <strong id="checkoutPrice">€1.99</strong>
@@ -169,22 +174,21 @@
 
       <div class="checkout-details">
         <p>
-          <strong>Test Mode:</strong> No real money will be charged.
+          This package will unlock the matching access role inside the Monkey Core Discord server.
         </p>
 
         <p>
-          Later this button can be connected to Discord login and automatic
-          role assignment.
+          Discord role assignment will be connected to the Monkey Core Shop Bot.
         </p>
       </div>
 
       <label class="checkbox-line">
         <input id="agreeBox" type="checkbox" />
-        <span>I understand this is only a test checkout.</span>
+        <span>I understand that this package is connected to Discord access.</span>
       </label>
 
       <button class="confirm-button" onclick="confirmCheckout()">
-        Continue Test Checkout
+        Continue Checkout
       </button>
 
       <p id="checkoutResult" class="checkout-result"></p>
