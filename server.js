@@ -1,59 +1,50 @@
+require("dotenv").config();
+
 const express = require("express");
 const path = require("path");
-require("dotenv").config();
+const { Client, GatewayIntentBits } = require("discord.js");
 
 const app = express();
 
 const PORT = process.env.PORT || 3000;
+const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
+
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers
+  ]
+});
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.urlencoded({ extended: true }));
 
-app.get("/health", (req, res) => {
+app.get("/api/status", (req, res) => {
   res.json({
-    status: "online",
-    project: "Monke Core Shop Test"
+    website: "online",
+    bot: client.isReady() ? "online" : "offline",
+    botName: client.user ? client.user.tag : null
   });
 });
 
-app.post("/api/test-checkout", (req, res) => {
-  const { packageId } = req.body;
+app.use(express.static(path.join(__dirname, "public")));
 
-  const packages = {
-    checker: {
-      name: "Checker Pack",
-      price: "€1.99",
-      role: "Checker Access"
-    },
-    utility: {
-      name: "Utility Pack",
-      price: "€5.99",
-      role: "Utility Access"
-    },
-    allaccess: {
-      name: "All Access Pack",
-      price: "€7.99",
-      role: "All Access"
-    }
-  };
+client.once("ready", () => {
+  console.log(`✅ Discord Bot online als ${client.user.tag}`);
+});
 
-  const selectedPackage = packages[packageId];
-
-  if (!selectedPackage) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid package selected."
-    });
-  }
-
-  return res.json({
-    success: true,
-    testMode: true,
-    message: "Test checkout completed. Discord role connection will be added later.",
-    package: selectedPackage
-  });
+client.on("error", (error) => {
+  console.error("❌ Discord Client Fehler:", error);
 });
 
 app.listen(PORT, () => {
-  console.log(`Monke Core Shop Test is running on http://localhost:${PORT}`);
+  console.log(`✅ Website läuft auf Port ${PORT}`);
 });
+
+if (!DISCORD_BOT_TOKEN) {
+  console.warn("⚠️ DISCORD_BOT_TOKEN fehlt. Bot wird nicht gestartet.");
+} else {
+  client.login(DISCORD_BOT_TOKEN).catch((error) => {
+    console.error("❌ Bot Login fehlgeschlagen:", error);
+  });
+}
