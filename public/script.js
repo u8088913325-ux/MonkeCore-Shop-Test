@@ -1,92 +1,147 @@
-const packageData = {
+const packages = {
   checker: {
-    icon: "🛡️",
     name: "Checker Pack",
     price: "€1.99",
-    role: "Checker Access"
+    icon: "🛡️"
   },
   utility: {
-    icon: "💻",
     name: "Utility Pack",
     price: "€5.99",
-    role: "Utility Access"
+    icon: "💻"
   },
   allaccess: {
-    icon: "📦",
     name: "All Access Pack",
     price: "€7.99",
-    role: "All Access"
+    icon: "📦"
   }
 };
 
-let selectedPackageId = null;
+let selectedPackage = null;
+let currentUser = null;
+
+async function loadDiscordUser() {
+  try {
+    const response = await fetch("/api/me");
+    const data = await response.json();
+
+    currentUser = data.loggedIn ? data.user : null;
+    updateDiscordLoginButton();
+  } catch (error) {
+    console.error("Could not load Discord user:", error);
+  }
+}
+
+function updateDiscordLoginButton() {
+  const button = document.getElementById("discordLoginButton");
+
+  if (!button) return;
+
+  if (currentUser) {
+    button.textContent = `Connected: ${currentUser.globalName || currentUser.username}`;
+    button.classList.add("connected");
+  } else {
+    button.textContent = "Authorize with Discord";
+    button.classList.remove("connected");
+  }
+}
 
 function openCheckout(packageId) {
-  selectedPackageId = packageId;
+  selectedPackage = packageId;
 
-  const selectedPackage = packageData[packageId];
+  const packageInfo = packages[packageId];
 
-  document.getElementById("checkoutIcon").textContent = selectedPackage.icon;
-  document.getElementById("checkoutName").textContent = selectedPackage.name;
-  document.getElementById("checkoutPrice").textContent = selectedPackage.price;
-  document.getElementById("checkoutResult").textContent = "";
-  document.getElementById("agreeBox").checked = false;
+  if (!packageInfo) return;
 
-  document.getElementById("checkoutModal").classList.remove("hidden");
+  const checkoutModal = document.getElementById("checkoutModal");
+  const checkoutIcon = document.getElementById("checkoutIcon");
+  const checkoutName = document.getElementById("checkoutName");
+  const checkoutPrice = document.getElementById("checkoutPrice");
+  const checkoutResult = document.getElementById("checkoutResult");
+  const agreeBox = document.getElementById("agreeBox");
+
+  checkoutIcon.textContent = packageInfo.icon;
+  checkoutName.textContent = packageInfo.name;
+  checkoutPrice.textContent = packageInfo.price;
+  checkoutResult.textContent = "";
+  checkoutResult.className = "checkout-result";
+  agreeBox.checked = false;
+
+  checkoutModal.classList.remove("hidden");
 }
 
 function closeCheckout() {
-  document.getElementById("checkoutModal").classList.add("hidden");
+  const checkoutModal = document.getElementById("checkoutModal");
+  checkoutModal.classList.add("hidden");
 }
 
 async function confirmCheckout() {
+  const checkoutResult = document.getElementById("checkoutResult");
   const agreeBox = document.getElementById("agreeBox");
-  const resultText = document.getElementById("checkoutResult");
+
+  checkoutResult.className = "checkout-result";
+
+  if (!selectedPackage) {
+    checkoutResult.textContent = "Please select a package first.";
+    checkoutResult.classList.add("error");
+    return;
+  }
 
   if (!agreeBox.checked) {
-    resultText.style.color = "#ff7d7d";
-    resultText.textContent = "Please confirm that you understand this is only a test checkout.";
+    checkoutResult.textContent = "Please confirm that you understand the Discord access.";
+    checkoutResult.classList.add("error");
     return;
   }
 
-  if (!selectedPackageId) {
-    resultText.style.color = "#ff7d7d";
-    resultText.textContent = "No package selected.";
+  if (!currentUser) {
+    checkoutResult.textContent = "Please authorize with Discord first.";
+    checkoutResult.classList.add("error");
+
+    setTimeout(() => {
+      window.location.href = "/auth/discord";
+    }, 1000);
+
     return;
   }
+
+  checkoutResult.textContent = "Adding Discord role...";
+  checkoutResult.classList.add("loading");
 
   try {
-    const response = await fetch("/api/test-checkout", {
+    const response = await fetch("/api/checkout", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        packageId: selectedPackageId
+        packageId: selectedPackage
       })
     });
 
     const data = await response.json();
 
-    if (!data.success) {
-      resultText.style.color = "#ff7d7d";
-      resultText.textContent = data.message || "Something went wrong.";
+    checkoutResult.className = "checkout-result";
+
+    if (!response.ok || !data.success) {
+      checkoutResult.textContent = data.message || "Something went wrong.";
+      checkoutResult.classList.add("error");
       return;
     }
 
-    resultText.style.color = "#7dffad";
-    resultText.innerHTML = `
-      Test checkout completed.<br>
-      Selected: ${data.package.name}<br>
-      Role later: ${data.package.role}<br><br>
-      Discord role connection will be added next.
-    `;
+    checkoutResult.textContent = data.message || "Access granted.";
+    checkoutResult.classList.add("success");
+
+    setTimeout(() => {
+      window.location.href = "/discord";
+    }, 1500);
   } catch (error) {
-    resultText.style.color = "#ff7d7d";
-    resultText.textContent = "Server error. Make sure the Node.js server is running.";
+    console.error("Checkout error:", error);
+
+    checkoutResult.className = "checkout-result";
+    checkoutResult.textContent = "Could not connect to the shop system.";
+    checkoutResult.classList.add("error");
   }
 }
 
-function openDiscordInfo() {
-  alert("Later, this button can open your Monke Core Discord invite link.");
-}
+window.addEventListener("load", () => {
+  loadDiscordUser();
+});
