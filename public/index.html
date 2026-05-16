@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>Monke Core Packages</title>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="background-glow"></div>
+
+  <header class="top-bar">
+    <div class="brand">
+      <div class="logo-circle">MC</div>
+
+      <div>
+        <h1>Monke Core</h1>
+        <p>Camera Mod • Mod Checker • Utility Tools</p>
+      </div>
+    </div>
+
+    <button class="discord-button" onclick="openDiscordInfo()">
+      Discord Server
+    </button>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="badge">TEST SHOP VERSION</div>
+
+      <h2>Monke Core Access Packages</h2>
+
+      <p>
+        Choose a package to unlock extra Monke Core areas inside the Discord server.
+        This page is currently only a test version. No real payment will be taken.
+      </p>
+    </section>
+
+    <section class="packages">
+      <article class="package-card basic">
+        <div class="icon">🛡️</div>
+
+        <h3>Checker Pack</h3>
+
+        <div class="price">€1.99</div>
+        <div class="price-note">one-time access test</div>
+
+        <button class="subscribe-button" onclick="openCheckout('checker')">
+          Test Subscribe
+        </button>
+
+        <div class="member-preview blue">
+          <span class="avatar">🐵</span>
+
+          <div>
+            <strong>ZeroClimbvr</strong>
+            <p>wow, this looks so cool</p>
+          </div>
+        </div>
+
+        <h4>Included</h4>
+
+        <ul>
+          <li>Mod Checker access area</li>
+          <li>Checker updates</li>
+          <li>Checker help channel</li>
+          <li>Checker suggestions</li>
+          <li>Checker bug reports</li>
+          <li>Checker chat access</li>
+        </ul>
+      </article>
+
+      <article class="package-card utility">
+        <div class="icon">💻</div>
+
+        <h3>Utility Pack</h3>
+
+        <div class="price">€5.99</div>
+        <div class="price-note">one-time access test</div>
+
+        <button class="subscribe-button" onclick="openCheckout('utility')">
+          Test Subscribe
+        </button>
+
+        <div class="member-preview purple">
+          <span class="avatar">🐵</span>
+
+          <div>
+            <strong>ZeroClimbvr</strong>
+            <p>wow, this looks so cool</p>
+          </div>
+        </div>
+
+        <h4>Included</h4>
+
+        <ul>
+          <li>Utility Tools area</li>
+          <li>Utility updates</li>
+          <li>Utility help channel</li>
+          <li>Utility suggestions</li>
+          <li>Utility bug reports</li>
+          <li>Key system information</li>
+        </ul>
+      </article>
+
+      <article class="package-card allaccess">
+        <div class="icon">📦</div>
+
+        <h3>All Access Pack</h3>
+
+        <div class="price">€7.99</div>
+        <div class="price-note">one-time access test</div>
+
+        <button class="subscribe-button" onclick="openCheckout('allaccess')">
+          Test Subscribe
+        </button>
+
+        <div class="member-preview gold">
+          <span class="avatar">🐵</span>
+
+          <div>
+            <strong>ZeroClimbvr</strong>
+            <p>wow, this looks so cool</p>
+          </div>
+        </div>
+
+        <h4>Included</h4>
+
+        <ul>
+          <li>Everything in Checker Pack</li>
+          <li>Everything in Utility Pack</li>
+          <li>All Downloads area</li>
+          <li>All Access updates</li>
+          <li>All Access help</li>
+          <li>Future package updates</li>
+        </ul>
+      </article>
+    </section>
+
+    <section class="warning-box">
+      <h3>⚠️ Read Before Use</h3>
+
+      <p>
+        Monke Core does not support cheats, crashers, kick tools, long arms,
+        fly cheats or public lobby exploits. Use tools responsibly and only
+        where they are allowed.
+      </p>
+    </section>
+  </main>
+
+  <div id="checkoutModal" class="modal hidden">
+    <div class="modal-content">
+      <button class="close-button" onclick="closeCheckout()">×</button>
+
+      <h2>Checkout</h2>
+
+      <div class="checkout-row">
+        <div id="checkoutIcon" class="checkout-icon">🛡️</div>
+
+        <div>
+          <h3 id="checkoutName">Checker Pack</h3>
+          <p>Monke Core test access</p>
+        </div>
+
+        <strong id="checkoutPrice">€1.99</strong>
+      </div>
+
+      <div class="checkout-details">
+        <p>
+          <strong>Test Mode:</strong> No real money will be charged.
+        </p>
+
+        <p>
+          Later this button can be connected to Discord login and automatic
+          role assignment.
+        </p>
+      </div>
+
+      <label class="checkbox-line">
+        <input id="agreeBox" type="checkbox" />
+        <span>I understand this is only a test checkout.</span>
+      </label>
+
+      <button class="confirm-button" onclick="confirmCheckout()">
+        Continue Test Checkout
+      </button>
+
+      <p id="checkoutResult" class="checkout-result"></p>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
