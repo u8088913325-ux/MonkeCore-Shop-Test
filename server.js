@@ -40,9 +40,7 @@ function parseCookies(req) {
 
   header.split(";").forEach((part) => {
     const [key, ...valueParts] = part.trim().split("=");
-
     if (!key) return;
-
     cookies[key] = decodeURIComponent(valueParts.join("="));
   });
 
@@ -58,13 +56,15 @@ function getSession(req) {
   return sessions.get(sessionId) || null;
 }
 
-function createSession(res, user) {
+function createSession(res, user, accessToken) {
   const sessionId = crypto.randomBytes(32).toString("hex");
 
   sessions.set(sessionId, {
     discordUserId: user.id,
     username: user.username,
-    globalName: user.global_name || user.username
+    globalName: user.global_name || user.username,
+    accessToken,
+    createdAt: Date.now()
   });
 
   res.setHeader(
@@ -80,7 +80,7 @@ function clearSession(res) {
   );
 }
 
-function checkConfig() {
+function getMissingConfig() {
   const missing = [];
 
   if (!DISCORD_BOT_TOKEN) missing.push("DISCORD_BOT_TOKEN");
@@ -96,20 +96,39 @@ function checkConfig() {
   return missing;
 }
 
-async function discordApiRequest(url, options = {}) {
-  const response = await fetch(url, {
+async function discordBotRequest(url, options = {}) {
+  return await fetch(url, {
     ...options,
     headers: {
       Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
       ...(options.headers || {})
     }
   });
+}
 
-  return response;
+async function getDiscordUserGuilds(accessToken) {
+  const response = await fetch("https://discord.com/api/users/@me/guilds", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Could not read user guilds: ${response.status} ${text}`);
+  }
+
+  return await response.json();
+}
+
+async function isUserInTargetGuild(accessToken) {
+  const guilds = await getDiscordUserGuilds(accessToken);
+
+  return guilds.some((guild) => guild.id === DISCORD_GUILD_ID);
 }
 
 async function getGuildMember(discordUserId) {
-  const response = await discordApiRequest(
+  const response = await discordBotRequest(
     `https://discord.com/api/v10/guilds/${DISCORD_GUILD_ID}/members/${discordUserId}`,
     {
       method: "GET"
@@ -121,29 +140,11 @@ async function getGuildMember(discordUserId) {
   }
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Could not fetch guild member: ${response.status} ${errorText}`);
+    const text = await response.text();
+    throw new Error(`Could not fetch guild member: ${response.status} ${text}`);
   }
 
   return await response.json();
-}
-
-async function addRoleToUser(discordUserId, roleId) {
-  if (!roleId) {
-    throw new Error("Missing role ID.");
-  }
-
-  const response = await discordApiRequest(
-    `https://discord.com/api/v10/guilds/${DISCORD_GUILD_ID}/members/${discordUserId}/roles/${roleId}`,
-    {
-      method: "PUT"
-    }
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Could not add role ${roleId}: ${response.status} ${errorText}`);
-  }
 }
 
 function memberHasRole(member, roleId) {
@@ -154,57 +155,93 @@ function memberHasRole(member, roleId) {
   );
 }
 
-async function giveShopRoleIfMissing(discordUserId) {
-  const member = await getGuildMember(discordUserId);
-
-  if (!member) {
-    return {
-      inServer: false,
-      hasShopRole: false,
-      roleAdded: false
-    };
+async function addRoleToUser(discordUserId, roleId) {
+  if (!roleId) {
+    throw new Error("Missing role ID.");
   }
 
-  if (memberHasRole(member, SHOP_ACCESS_ROLE_ID)) {
-    return {
-      inServer: true,
-      hasShopRole: true,
-      roleAdded: false
-    };
-  }
+  const response = await discordBotRequest(
+    `https://discord.com/api/v10/guilds/${DISCORD_GUILD_ID}/members/${discordUserId}/roles/${roleId}`,
+    {
+      method: "PUT"
+    }
+  );
 
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Could not add role ${roleId}: ${response.status} ${text}`);
+  }
+}
+
+async function ensureShopRole(discordUserId) {
   await addRoleToUser(discordUserId, SHOP_ACCESS_ROLE_ID);
 
-  return {
-    inServer: true,
-    hasShopRole: true,
-    roleAdded: true
-  };
+  return true;
 }
 
-async function checkShopAccess(discordUserId) {
-  const member = await getGuildMember(discordUserId);
-
-  if (!member) {
+async function checkAccess(session) {
+  if (!session) {
     return {
+      loggedIn: false,
       inServer: false,
       hasShopRole: false,
-      member: null
+      roles: []
     };
   }
 
+  let inServerByOauth = false;
+
+  try {
+    inServerByOauth = await isUserInTargetGuild(session.accessToken);
+  } catch (error) {
+    console.error("OAuth guild check failed:", error.message);
+  }
+
+  let member = null;
+  let hasShopRole = false;
+  let roles = [];
+
+  try {
+    member = await getGuildMember(session.discordUserId);
+
+    if (member) {
+      roles = Array.isArray(member.roles) ? member.roles : [];
+      hasShopRole = memberHasRole(member, SHOP_ACCESS_ROLE_ID);
+    }
+  } catch (error) {
+    console.error("Bot member check failed:", error.message);
+  }
+
+  if (inServerByOauth) {
+    try {
+      await ensureShopRole(session.discordUserId);
+
+      member = await getGuildMember(session.discordUserId).catch(() => null);
+
+      if (member) {
+        roles = Array.isArray(member.roles) ? member.roles : [];
+        hasShopRole = memberHasRole(member, SHOP_ACCESS_ROLE_ID);
+      } else {
+        hasShopRole = true;
+      }
+    } catch (error) {
+      console.error("Could not ensure shop role:", error.message);
+    }
+  }
+
   return {
-    inServer: true,
-    hasShopRole: memberHasRole(member, SHOP_ACCESS_ROLE_ID),
-    member
+    loggedIn: true,
+    inServer: inServerByOauth || Boolean(member),
+    hasShopRole,
+    roles
   };
 }
 
-function getPackageRoles(packageId) {
-  const normalizedPackageId = String(packageId || "")
-    .trim()
+function getPackage(packageId) {
+  const id = String(packageId || "")
     .toLowerCase()
-    .replace(/[_\s-]/g, "");
+    .trim()
+    .replace(/[\s_-]/g, "");
 
   const packages = {
     checker: {
@@ -233,20 +270,18 @@ function getPackageRoles(packageId) {
     }
   };
 
-  return packages[normalizedPackageId] || null;
+  return packages[id] || null;
 }
 
 app.get("/api/status", (req, res) => {
-  const missingConfig = checkConfig();
+  const missingConfig = getMissingConfig();
 
   res.json({
     website: "online",
     bot: client.isReady() ? "online" : "offline",
     botName: client.user ? client.user.tag : null,
-    config: {
-      ready: missingConfig.length === 0,
-      missing: missingConfig
-    }
+    configReady: missingConfig.length === 0,
+    missingConfig
   });
 });
 
@@ -270,7 +305,7 @@ app.get("/auth/discord", (req, res) => {
     client_id: DISCORD_CLIENT_ID,
     redirect_uri: DISCORD_REDIRECT_URI,
     response_type: "code",
-    scope: "identify",
+    scope: "identify guilds",
     state
   });
 
@@ -321,26 +356,36 @@ app.get("/auth/discord/callback", async (req, res) => {
       return res.status(400).send("Could not read Discord user.");
     }
 
-    const accessResult = await giveShopRoleIfMissing(user.id);
+    createSession(res, user, tokenData.access_token);
 
-    createSession(res, user);
+    const session = {
+      discordUserId: user.id,
+      username: user.username,
+      globalName: user.global_name || user.username,
+      accessToken: tokenData.access_token
+    };
 
-    if (!accessResult.inServer) {
-      return res.redirect("/?discord=not-in-server");
+    const access = await checkAccess(session);
+
+    if (!access.inServer) {
+      return res.redirect("/?discord=connected&server=missing");
     }
 
-    if (accessResult.roleAdded) {
-      return res.redirect("/?discord=connected&shopRole=added");
+    if (!access.hasShopRole) {
+      return res.redirect("/?discord=connected&shopRole=missing");
     }
 
-    return res.redirect("/?discord=connected&shopRole=exists");
+    return res.redirect("/?discord=connected&shopRole=ok");
   } catch (error) {
     console.error("Discord callback error:", error);
 
-    res.status(500).send(
-      "Discord login failed. Please make sure you joined the Discord server first."
-    );
+    res.status(500).send("Discord login failed.");
   }
+});
+
+app.get("/auth/logout", (req, res) => {
+  clearSession(res);
+  res.redirect("/");
 });
 
 app.post("/auth/logout", (req, res) => {
@@ -358,6 +403,7 @@ app.get("/api/me", async (req, res) => {
     if (!session) {
       return res.json({
         loggedIn: false,
+        message: "No website session found. Please authorize with Discord first.",
         discord: {
           inServer: false,
           hasShopRole: false
@@ -365,18 +411,20 @@ app.get("/api/me", async (req, res) => {
       });
     }
 
-    const access = await checkShopAccess(session.discordUserId);
+    const access = await checkAccess(session);
 
     res.json({
       loggedIn: true,
-      user: {
+      authorizedDiscordAccount: {
         id: session.discordUserId,
         username: session.username,
         globalName: session.globalName
       },
       discord: {
+        guildId: DISCORD_GUILD_ID,
         inServer: access.inServer,
-        hasShopRole: access.hasShopRole
+        hasShopRole: access.hasShopRole,
+        roles: access.roles
       }
     });
   } catch (error) {
@@ -384,11 +432,46 @@ app.get("/api/me", async (req, res) => {
 
     res.status(500).json({
       loggedIn: false,
-      message: "Could not check Discord access.",
+      error: "Could not check Discord access.",
+      details: error.message
+    });
+  }
+});
+
+app.post("/api/refresh-access", async (req, res) => {
+  try {
+    const session = getSession(req);
+
+    if (!session) {
+      return res.status(401).json({
+        success: false,
+        message: "Please authorize with Discord first."
+      });
+    }
+
+    const access = await checkAccess(session);
+
+    res.json({
+      success: true,
+      message: "Access refreshed.",
+      authorizedDiscordAccount: {
+        id: session.discordUserId,
+        username: session.username,
+        globalName: session.globalName
+      },
       discord: {
-        inServer: false,
-        hasShopRole: false
+        inServer: access.inServer,
+        hasShopRole: access.hasShopRole,
+        roles: access.roles
       }
+    });
+  } catch (error) {
+    console.error("Refresh access error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Could not refresh access.",
+      details: error.message
     });
   }
 });
@@ -400,7 +483,7 @@ app.post("/api/checkout", async (req, res) => {
     if (!session) {
       return res.status(401).json({
         success: false,
-        message: "Please connect your Discord account first."
+        message: "Please authorize with Discord first."
       });
     }
 
@@ -411,49 +494,66 @@ app.post("/api/checkout", async (req, res) => {
       });
     }
 
-    const { packageId } = req.body;
-    const selectedPackage = getPackageRoles(packageId);
+    const selectedPackage = getPackage(req.body.packageId);
 
     if (!selectedPackage) {
       return res.status(400).json({
         success: false,
-        message: "Unknown package selected."
+        message: "Unknown package selected.",
+        receivedPackageId: req.body.packageId || null
       });
     }
 
-    const access = await checkShopAccess(session.discordUserId);
+    const access = await checkAccess(session);
 
     if (!access.inServer) {
       return res.status(403).json({
         success: false,
-        message: "You must join the Discord server before buying a package."
+        message: "You must join the Discord server before buying a package.",
+        debug: {
+          reason: "USER_NOT_IN_DISCORD_SERVER",
+          authorizedDiscordAccount: {
+            id: session.discordUserId,
+            username: session.username,
+            globalName: session.globalName
+          },
+          guildId: DISCORD_GUILD_ID
+        }
       });
     }
 
     if (!access.hasShopRole) {
       return res.status(403).json({
         success: false,
-        message: "You need the Monkey Core Shop role before buying a package. Please authorize with Discord again."
+        message: "You need the Monkey Core Shop role before buying a package. Please authorize with Discord again.",
+        debug: {
+          reason: "SHOP_ROLE_MISSING",
+          shopRoleId: SHOP_ACCESS_ROLE_ID
+        }
       });
     }
 
     for (const roleId of selectedPackage.roles) {
-      if (roleId) {
-        await addRoleToUser(session.discordUserId, roleId);
-      }
+      await addRoleToUser(session.discordUserId, roleId);
     }
 
     res.json({
       success: true,
       package: selectedPackage.name,
-      message: `${selectedPackage.name} unlocked. Your Discord role has been added.`
+      message: `${selectedPackage.name} unlocked. Your Discord role has been added.`,
+      authorizedDiscordAccount: {
+        id: session.discordUserId,
+        username: session.username,
+        globalName: session.globalName
+      }
     });
   } catch (error) {
     console.error("Checkout role error:", error);
 
     res.status(500).json({
       success: false,
-      message: "Could not complete checkout. Make sure you are in the Discord server and the bot role is high enough."
+      message: "Could not complete checkout. Check Railway logs for the exact Discord error.",
+      details: error.message
     });
   }
 });
@@ -468,12 +568,7 @@ client.on("guildMemberAdd", async (member) => {
   try {
     if (member.guild.id !== DISCORD_GUILD_ID) return;
 
-    if (!SHOP_ACCESS_ROLE_ID) {
-      console.warn("⚠️ SHOP_ACCESS_ROLE_ID fehlt.");
-      return;
-    }
-
-    await member.roles.add(SHOP_ACCESS_ROLE_ID);
+    await addRoleToUser(member.user.id, SHOP_ACCESS_ROLE_ID);
 
     console.log(`✅ Monkey Core Shop Rolle gegeben an ${member.user.tag}`);
   } catch (error) {
